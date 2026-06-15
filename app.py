@@ -57,7 +57,7 @@ def select_job():
                 {
                     "action": "block",
                     "label": "🔦 조사 시작하기",
-                    "blockId": "실제_창고_블록_ID"  # 👈 여기에 오픈빌더 '창고' 블록 ID를 복사해서 붙여넣으세요!
+                    "blockId": "6a1ce5ff06bca080bd8847be"  # 👈 여기에 오픈빌더 '창고' 블록 ID를 복사해서 붙여넣으세요!
                 }
             ]
         }
