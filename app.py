@@ -116,7 +116,7 @@ def roll_check():
     
     client_extra = req['action'].get('clientExtra', {})
     stat_type = client_extra.get('stat', '운')             
-    difficulty = int(client_extra.get('dc', 5))           
+    difficulty = int(client_extra.get('dc', 5))            
     success_block = client_extra.get('success_block_id')   
     fail_block = client_extra.get('fail_block_id')         
     is_final = client_extra.get('is_final', False)         
@@ -127,7 +127,7 @@ def roll_check():
     # 2. 스탯 보너스
     stat_bonus = player["stats"].get(stat_type, 0)
     
-   # 3. 아이템 보너스
+    # 3. 아이템 보너스
     item_bonus = 0
     if stat_type == "힘":
         if "야구 배트" in player["inventory"]:
@@ -156,6 +156,10 @@ def roll_check():
         next_block = success_block
         button_label = "다음 스토리 진행"
     else:
+        # 🎯 [수정된 부분] 실패했을 때 인벤토리에 '빗자루'를 추가하는 코드
+        if "빗자루" not in player["inventory"]:
+            player["inventory"].append("빗자루")
+            
         title = "💀 판정 실패..."
         desc = (
             f"📊 판정 종류: [{stat_type}] 판정 (목표치: {difficulty} 이상)\n"
@@ -194,7 +198,6 @@ def roll_check():
             ]
         }
     })
-
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
