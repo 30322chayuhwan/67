@@ -102,12 +102,15 @@ def roll_check():
     # 2. 스탯 보너스
     stat_bonus = player["stats"].get(stat_type, 0)
     
-    # 3. 아이템 보너스
+   # 3. 아이템 보너스
     item_bonus = 0
-    if stat_type == "힘" and "대걸레 자루" in player["inventory"]:
-        item_bonus = 2  
+    if stat_type == "힘":
+        if "야구 배트" in player["inventory"]:
+            item_bonus = 2
+        elif "빗자루" in player["inventory"]:
+            item_bonus = 1
     elif stat_type == "정신력" and "오컬트 부적" in player["inventory"]:
-        item_bonus = 2  
+        item_bonus = 2
 
     # 4. 최종 점수 계산 및 판정
     total_score = dice_roll + stat_bonus + item_bonus
