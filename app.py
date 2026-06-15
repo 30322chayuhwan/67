@@ -18,7 +18,12 @@ JOB_STATS = {
 def select_job():
     """ [블록 2: 직업 선택] 유저 세션 생성 및 스탯 부여 """
     req = request.get_json()
-    user_id = req['userRequest']['user']['id']
+    # 카카오톡이 주는 유저 고유 키를 여러 경로로 안전하게 탐색
+    user_request = req.get('userRequest', {})
+    user_info = user_request.get('user', {})
+    
+    # id가 없으면 plusfriendUserKey나 가짜 고유값을 만들어서라도 매칭 성공시킴
+    user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
     chosen_job = req['action']['params'].get('chosen_job', '범생이')
     
     user_db[user_id] = {
@@ -82,7 +87,9 @@ def add_item():
 def roll_check():
     """ [범용 주사위 판정 시스템] 대성공/대실패 로직 제거 버전 """
     req = request.get_json()
-    user_id = req['userRequest']['user']['id']
+    user_request = req.get('userRequest', {})
+    user_info = user_request.get('user', {})
+    user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
     
     if user_id not in user_db:
         return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": "⚠️ 플레이 기록이 없습니다. 처음부터 시작해주세요."}}]}})
