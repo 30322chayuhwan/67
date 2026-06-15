@@ -24,7 +24,9 @@ def select_job():
     
     # id가 없으면 plusfriendUserKey나 가짜 고유값을 만들어서라도 매칭 성공시킴
     user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
-    chosen_job = req['action']['params'].get('chosen_job', '범생이')
+    # 카카오 빌더 버튼과 바로연결 버튼 모두 지원하도록 데이터 추출 경로 보완
+    action = req.get('action', {})
+    chosen_job = action.get('params', {}).get('chosen_job') or action.get('clientExtra', {}).get('chosen_job', '범생이')
     
     user_db[user_id] = {
         "job": chosen_job,
