@@ -42,9 +42,25 @@ def select_job():
         f"🧠 정신력: {stats['정신력']}\n\n"
         f"이제 교실 중앙에서 조사를 시작하세요."
     )
+# 기존 return 구문을 지우고 이 구문으로 교체합니다.
     return jsonify({
         "version": "2.0",
-        "template": {"outputs": [{"simpleText": {"text": response_text}}]}
+        "template": {
+            "outputs": [
+                {
+                    "simpleText": {
+                        "text": response_text
+                    }
+                }
+            ],
+            "quickReplies": [
+                {
+                    "action": "block",
+                    "label": "🔦 조사 시작하기",
+                    "blockId": "실제_창고_블록_ID"  # 👈 여기에 오픈빌더 '창고' 블록 ID를 복사해서 붙여넣으세요!
+                }
+            ]
+        }
     })
 
 
