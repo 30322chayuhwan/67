@@ -220,7 +220,35 @@ def check_status():
             }]
         }
     })
+@app.route('/reset_data', methods=['POST'])
+def reset_data():
+    """ [신규 블록] 유저의 데이터(스탯, 가방)를 완전히 삭제하고 초기화 """
+    req = request.get_json()
+    user_id = get_clean_user_id(req) # 유저 고유 ID 가져오기
+    
+    # 🔥 유저 데이터베이스(user_db)에서 해당 유저의 정보를 완전히 삭제합니다.
+    if user_id in user_db:
+        del user_db[user_id]
+        
+    response_text = (
+        "🧼 [데이터 초기화 완료]\n\n"
+        "당신의 모든 기억과 가방, 스탯이 깔끔하게 삭제되었습니다.\n"
+        "아래 버튼을 눌러 처음부터 새롭게 캐릭터를 선택해 주세요."
+    )
 
+    return jsonify({
+        "version": "2.0",
+        "template": {
+            "outputs": [{"simpleText": {"text": response_text}}],
+            "quickReplies": [
+                {
+                    "action": "block", 
+                    "label": "🎭 직업 다시 선택하기", 
+                    "blockId": "6a26283f95b9c60df67a5932" # 👈 중요!
+                }
+            ]
+        }
+    })
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
