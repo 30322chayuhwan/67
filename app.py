@@ -14,8 +14,7 @@ JOB_STATS = {
     "미술 실기생": {"힘": 2, "민첩": 1, "지능": 2, "운": 2, "정신력": 3}
 }
 
-# 🎭 직업별로 출력할 카카오톡 메시지를 미리 하나하나 다 정의해둡니다!
-# 나중에 문구나 이모지를 바꾸고 싶다면 여기만 수정하시면 됩니다.
+# 직업별 출력 텍스트 정의
 JOB_RESPONSES = {
     "범생이": (
         "🤓 [범생이]을(를) 선택하셨습니다!\n\n"
@@ -38,37 +37,54 @@ JOB_RESPONSES = {
         "💪 힘: 2 | ⚡ 민첩: 1\n"
         "🧠 지능: 2 | 🍀 운: 2\n"
         "🛡️ 정신력: 3\n\n"
-        "섬세한 감각과 남다른 정신력을 가졌습니다.\n"
+        "섬세한 감각 and 남다른 정신력을 가졌습니다.\n"
         "이제 교실 중앙에서 조사를 시작하세요."
     )
 }
 
-@app.route('/select_job', methods=['POST'])
-def select_job():
-    """ [블록 2: 직업 선택] 1:1 매칭 텍스트 직접 출력 버전 """
-    req = request.get_json()
+def get_clean_user_id(req):
+    """ 
+    🔍 어떤 상황(테스트 창, 실제 카카오톡, 블록 링크)에서도 
+    동일한 유저라면 반드시 똑같은 텍스트 ID를 반환하도록 강제하는 함수 
+    """
     user_request = req.get('userRequest', {})
     user_info = user_request.get('user', {})
-    user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
+    plusfriend = user_request.get('plusfriend', {})
     
-    # 유저가 보낸 발화에서 따옴표, 공백 제거 (예: "🏃 운동부" -> "운동부")
-    utterance = user_request.get('utterance', '').strip().replace('"', '').replace("'", "")
+    # 카카오가 보내주는 모든 종류의 ID 후보군을 순서대로 체크합니다.
+    uid = (
+        user_info.get('id') or 
+        user_info.get('plusfriendUserKey') or 
+        plusfriend.get('id') or 
+        'test_user'
+    )
+    return str(uid) # 안전하게 문자열로 변환
+
+@app.route('/select_job', methods=['POST'])
+def select_job():
+    """ [블록 2: 직업 선택] """
+    req = request.get_json()
+    user_id = get_clean_user_id(req) # ⭐ 안전한 ID 추출
     
-    # 🔍 입력받은 글자 그대로 직업을 결정합니다.
-    chosen_job = "범생이" # 찾지 못했을 때를 대비한 기본값
+    utterance = req.get('userRequest', {}).get('utterance', '').strip().replace('"', '').replace("'", "")
+    action = req.get('action', {})
+    
+    chosen_job = None
     for job in JOB_STATS.keys():
         if job in utterance:
             chosen_job = job
             break
             
-    # ⚠️ 중요: 내부 유저 데이터 DB(스탯, 인벤토리)는 기존대로 정확하게 초기화합니다.
+    if not chosen_job:
+        chosen_job = action.get('params', {}).get('chosen_job') or action.get('clientExtra', {}).get('chosen_job', '범생이')
+    
+    # 내부 DB에 저장
     user_db[user_id] = {
         "job": chosen_job,
         "stats": JOB_STATS[chosen_job].copy(),
         "inventory": []
     }
     
-    # 🎯 [핵심] 상단에 하나하나 적어둔 직업별 텍스트를 그대로 가져옵니다!
     response_text = JOB_RESPONSES.get(chosen_job, JOB_RESPONSES["범생이"])
 
     return jsonify({
@@ -80,59 +96,45 @@ def select_job():
             ]
         }
     })
+
 @app.route('/roll', methods=['POST'])
 def roll_check():
-    """ [범용 주사위 판정 시스템] 장소별 보상 추가 버전 """
+    """ [범용 주사위 판정 시스템] """
     req = request.get_json()
-    user_request = req.get('userRequest', {})
-    user_info = user_request.get('user', {})
-    user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
+    user_id = get_clean_user_id(req) # ⭐ 안전한 ID 추출
     
     if user_id not in user_db:
-        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": "⚠️ 플레이 기록이 없습니다. 처음부터(직업 선택) 다시 시작해주세요."}}]}})
+        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": f"⚠️ 플레이 기록이 없습니다. 처음부터 다시 시작해주세요. (ID: {user_id})"}}]}})
         
     player = user_db[user_id]
-    
-    # 카카오 빌더에서 넘겨받는 데이터들
     client_extra = req['action'].get('clientExtra', {})
     stat_type = client_extra.get('stat', '운')             
     difficulty = int(client_extra.get('dc', 5))            
     success_block = client_extra.get('success_block_id')   
     fail_block = client_extra.get('fail_block_id')         
-    location = client_extra.get('location', '일반')  # 👈 새로 추가됨! 현재 장소를 받아옵니다.
+    location = client_extra.get('location', '일반')  
 
-    # 1. 6면체 주사위 굴리기
     dice_roll = random.randint(1, 6)
-    
-    # 2. 스탯 보너스
     stat_bonus = player["stats"].get(stat_type, 0)
     
-    # 3. 🎯 아이템 착용(소지) 효과 적용
     item_bonus = 0
     if stat_type == "힘" and "빗자루" in player["inventory"]:
         item_bonus += 1
     if stat_type == "정신력" and "에너지바" in player["inventory"]:
         item_bonus += 1
 
-    # 4. 최종 점수 계산
     total_score = dice_roll + stat_bonus + item_bonus
     is_success = total_score >= difficulty
-
-    # 5. 결과 처리
-    acquired_item = None # 이번 턴에 얻은 아이템을 기록할 변수
+    acquired_item = None 
 
     if is_success:
-        # 🎉 성공했을 때 장소별 아이템 지급 로직
         if location == "창고" and "빗자루" not in player["inventory"]:
             player["inventory"].append("빗자루")
             acquired_item = "빗자루"
-            
         elif location == "교무실" and "에너지바" not in player["inventory"]:
             player["inventory"].append("에너지바")
             acquired_item = "에너지바"
-            
         elif location == "동아리실" and "유물" not in player["inventory"]:
-            # 🍀 운 스탯이 7 이상일 때만 유물 획득!
             if player["stats"].get("운", 0) >= 7:
                 player["inventory"].append("유물")
                 acquired_item = "유물"
@@ -142,7 +144,6 @@ def roll_check():
         if item_bonus > 0: desc += f"🎒 아이템 시너지: +{item_bonus}\n"
         desc += f"🔥 최종 점수: {total_score}\n\n성공 스토리가 이어집니다."
         
-        # 아이템을 얻었다면 문구 추가
         if acquired_item:
             desc += f"\n\n🎁 앗! 무언가 발견했습니다!\n[ {acquired_item} ]을(를) 획득했습니다!"
 
@@ -150,7 +151,6 @@ def roll_check():
         button_label = "다음 스토리 진행"
 
     else:
-        # 💀 실패했을 때는 이제 아무것도 주지 않습니다.
         title = "💀 판정 실패..."
         desc = f"📊 [{stat_type}] 판정 (목표: {difficulty})\n🎲 주사위: {dice_roll}\n💪 스탯: +{stat_bonus}\n"
         if item_bonus > 0: desc += f"🎒 아이템 시너지: +{item_bonus}\n"
@@ -159,7 +159,6 @@ def roll_check():
         next_block = fail_block
         button_label = "실패 결과 확인"
 
-    # 카드 출력 반환
     return jsonify({
         "version": "2.0",
         "template": {
@@ -172,30 +171,25 @@ def roll_check():
             }]
         }
     })
+
 @app.route('/check_status', methods=['POST'])
 def check_status():
     """ [신규 블록] 유저의 현재 상태 및 인벤토리(가방) 확인 """
     req = request.get_json()
-    user_request = req.get('userRequest', {})
-    user_info = user_request.get('user', {})
-    user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
+    user_id = get_clean_user_id(req) # ⭐ 안전한 ID 추출
     
-    # 플레이 기록이 없는 경우
     if user_id not in user_db:
-        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": "⚠️ 아직 게임을 시작하지 않았습니다. 직업을 먼저 선택해 주세요!"}}]}})
+        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": f"⚠️ 아직 게임을 시작하지 않았습니다. 직업을 먼저 선택해 주세요! (ID: {user_id})"}}]}})
         
     player = user_db[user_id]
     stats = player["stats"]
     inventory = player["inventory"]
     
-    # 직업별 이모지
     job_emojis = {"범생이": "🤓", "운동부": "🏃", "미술 실기생": "🎨"}
     job_emoji = job_emojis.get(player["job"], "🎭")
     
-    # 🎒 인벤토리 텍스트 정리 (비어있으면 "비어 있음", 있으면 쉼표로 연결)
     inventory_text = ", ".join([f"[{i}]" for i in inventory]) if inventory else "비어 있음"
     
-    # 현재 적용 중인 아이템 효과 설명 빌드
     active_effects = []
     if "빗자루" in inventory: active_effects.append("🧹 빗자루 (힘 판정 시 +1)")
     if "에너지바" in inventory: active_effects.append("🍫 에너지바 (정신력 판정 시 +1)")
@@ -203,7 +197,6 @@ def check_status():
     
     effects_text = "\n".join(active_effects) if active_effects else "적용 중인 효과 없음"
 
-    # 카드 형태로 내 정보 출력
     response_text = (
         f"{job_emoji} [{player['job']}]의 현재 상태\n"
         f"──────────────────\n"
@@ -222,11 +215,12 @@ def check_status():
                 "basicCard": {
                     "title": "📋 캐릭터 정보 및 가방",
                     "description": response_text,
-                    "buttons": [{"action": "block", "label": "돌아가기", "blockId": "6a1ce5d3568d272d8eb2365b"}] # 👈 '조사 시작하기(교실중앙)' 블록 ID로 연결해두면 편합니다!
+                    "buttons": [{"action": "block", "label": "돌아가기", "blockId": "6a1ce5d3568d272d8eb2365b"}]
                 }
             }]
         }
     })
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
