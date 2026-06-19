@@ -172,7 +172,61 @@ def roll_check():
             }]
         }
     })
+@app.route('/check_status', methods=['POST'])
+def check_status():
+    """ [신규 블록] 유저의 현재 상태 및 인벤토리(가방) 확인 """
+    req = request.get_json()
+    user_request = req.get('userRequest', {})
+    user_info = user_request.get('user', {})
+    user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
+    
+    # 플레이 기록이 없는 경우
+    if user_id not in user_db:
+        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": "⚠️ 아직 게임을 시작하지 않았습니다. 직업을 먼저 선택해 주세요!"}}]}})
+        
+    player = user_db[user_id]
+    stats = player["stats"]
+    inventory = player["inventory"]
+    
+    # 직업별 이모지
+    job_emojis = {"범생이": "🤓", "운동부": "🏃", "미술 실기생": "🎨"}
+    job_emoji = job_emojis.get(player["job"], "🎭")
+    
+    # 🎒 인벤토리 텍스트 정리 (비어있으면 "비어 있음", 있으면 쉼표로 연결)
+    inventory_text = ", ".join([f"[{i}]" for i in inventory]) if inventory else "비어 있음"
+    
+    # 현재 적용 중인 아이템 효과 설명 빌드
+    active_effects = []
+    if "빗자루" in inventory: active_effects.append("🧹 빗자루 (힘 판정 시 +1)")
+    if "에너지바" in inventory: active_effects.append("🍫 에너지바 (정신력 판정 시 +1)")
+    if "유물" in inventory: active_effects.append("✨ 유물 (신비한 기운이 맴돕니다)")
+    
+    effects_text = "\n".join(active_effects) if active_effects else "적용 중인 효과 없음"
 
+    # 카드 형태로 내 정보 출력
+    response_text = (
+        f"{job_emoji} [{player['job']}]의 현재 상태\n"
+        f"──────────────────\n"
+        f"💪 힘: {stats['힘']} | ⚡ 민첩: {stats['민첩']}\n"
+        f"🧠 지능: {stats['지능']} | 🍀 운: {stats['운']}\n"
+        f"🛡️ 정신력: {stats['정신력']}\n"
+        f"──────────────────\n"
+        f"🎒 소지품: {inventory_text}\n\n"
+        f"✨ 적용 중인 아이템 효과:\n{effects_text}"
+    )
+
+    return jsonify({
+        "version": "2.0",
+        "template": {
+            "outputs": [{
+                "basicCard": {
+                    "title": "📋 캐릭터 정보 및 가방",
+                    "description": response_text,
+                    "buttons": [{"action": "block", "label": "돌아가기", "blockId": "6a1ce5d3568d272d8eb2365b"}] # 👈 '조사 시작하기(교실중앙)' 블록 ID로 연결해두면 편합니다!
+                }
+            }]
+        }
+    })
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
