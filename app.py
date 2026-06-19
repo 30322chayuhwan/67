@@ -16,17 +16,24 @@ JOB_STATS = {
 
 @app.route('/select_job', methods=['POST'])
 def select_job():
-    """ [블록 2: 직업 선택 및 데이터 초기화] """
+    """ [블록 2: 직업 선택 및 데이터 초기화] 발화(utterance) 직접 인식 버전 """
     req = request.get_json()
     user_request = req.get('userRequest', {})
     user_info = user_request.get('user', {})
     user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
     
+    # 🔍 1. 유저가 실제로 누른 버튼의 텍스트(발화)를 바로 가져옵니다.
+    utterance = user_request.get('utterance', '').strip()
     action = req.get('action', {})
-    chosen_job = action.get('params', {}).get('chosen_job') or action.get('clientExtra', {}).get('chosen_job', '범생이')
     
-    # ⚠️ [핵심] 여기서 유저 데이터가 완전히 '초기화' 됩니다!
-    # 직업을 선택하는 순간 빈 인벤토리와 새 스탯으로 덮어씌워집니다.
+    # 🔍 2. 유저가 입력한 텍스트가 직업 목록(JOB_STATS)에 정확히 있는지 확인합니다.
+    if utterance in JOB_STATS:
+        chosen_job = utterance
+    else:
+        # 만약 발화가 이상하다면, 원래 방식(파라미터/기본값 '범생이')으로 폴백(Fallback)
+        chosen_job = action.get('params', {}).get('chosen_job') or action.get('clientExtra', {}).get('chosen_job', '범생이')
+    
+    # 유저 데이터 초기화 및 덮어쓰기
     user_db[user_id] = {
         "job": chosen_job,
         "stats": JOB_STATS[chosen_job].copy(),
@@ -34,8 +41,17 @@ def select_job():
     }
     
     stats = user_db[user_id]["stats"]
+    
+    # ✨ 3. 직업별로 어울리는 이모지를 매칭해줍니다!
+    job_emojis = {
+        "범생이": "🤓", 
+        "운동부": "🏃", 
+        "미술 실기생": "🎨"
+    }
+    job_emoji = job_emojis.get(chosen_job, "🎭")
+
     response_text = (
-        f"🎭 [{chosen_job}]을(를) 선택하셨습니다!\n\n"
+        f"{job_emoji} [{chosen_job}]을(를) 선택하셨습니다!\n\n"
         f"💪 힘: {stats['힘']} | ⚡ 민첩: {stats['민첩']}\n"
         f"🧠 지능: {stats['지능']} | 🍀 운: {stats['운']}\n"
         f"🛡️ 정신력: {stats['정신력']}\n\n"
