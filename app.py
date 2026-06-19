@@ -16,21 +16,25 @@ JOB_STATS = {
 
 @app.route('/select_job', methods=['POST'])
 def select_job():
-    """ [블록 2: 직업 선택 및 데이터 초기화] 발화(utterance) 직접 인식 버전 """
+    """ [블록 2: 직업 선택 및 데이터 초기화] 발화(utterance) 포함 확인 버전 """
     req = request.get_json()
     user_request = req.get('userRequest', {})
     user_info = user_request.get('user', {})
     user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
     
-    # 🔍 1. 유저가 실제로 누른 버튼의 텍스트(발화)를 바로 가져옵니다.
+    # 1. 유저가 실제로 누른 버튼의 텍스트(발화)를 가져옵니다. (예: "🏃 운동부")
     utterance = user_request.get('utterance', '').strip()
     action = req.get('action', {})
     
-    # 🔍 2. 유저가 입력한 텍스트가 직업 목록(JOB_STATS)에 정확히 있는지 확인합니다.
-    if utterance in JOB_STATS:
-        chosen_job = utterance
-    else:
-        # 만약 발화가 이상하다면, 원래 방식(파라미터/기본값 '범생이')으로 폴백(Fallback)
+    # 🔍 2. 유저의 입력값(발화) 안에 직업 이름이 '포함'되어 있는지 검사합니다.
+    chosen_job = None
+    for job in JOB_STATS.keys():
+        if job in utterance:  # "운동부"라는 글자가 "🏃 운동부" 안에 들어있다면!
+            chosen_job = job
+            break
+            
+    # 만약 직업 이름을 도저히 찾을 수 없다면 파라미터나 기본값(범생이)으로 처리
+    if not chosen_job:
         chosen_job = action.get('params', {}).get('chosen_job') or action.get('clientExtra', {}).get('chosen_job', '범생이')
     
     # 유저 데이터 초기화 및 덮어쓰기
@@ -42,7 +46,7 @@ def select_job():
     
     stats = user_db[user_id]["stats"]
     
-    # ✨ 3. 직업별로 어울리는 이모지를 매칭해줍니다!
+    # 직업별 이모지 매칭
     job_emojis = {
         "범생이": "🤓", 
         "운동부": "🏃", 
@@ -67,7 +71,6 @@ def select_job():
             ]
         }
     })
-
 @app.route('/roll', methods=['POST'])
 def roll_check():
     """ [범용 주사위 판정 시스템] 장소별 보상 추가 버전 """
