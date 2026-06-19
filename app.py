@@ -14,51 +14,62 @@ JOB_STATS = {
     "미술 실기생": {"힘": 2, "민첩": 1, "지능": 2, "운": 2, "정신력": 3}
 }
 
+# 🎭 직업별로 출력할 카카오톡 메시지를 미리 하나하나 다 정의해둡니다!
+# 나중에 문구나 이모지를 바꾸고 싶다면 여기만 수정하시면 됩니다.
+JOB_RESPONSES = {
+    "범생이": (
+        "🤓 [범생이]을(를) 선택하셨습니다!\n\n"
+        "💪 힘: 1 | ⚡ 민첩: 1\n"
+        "🧠 지능: 5 | 🍀 운: 1\n"
+        "🛡️ 정신력: 2\n\n"
+        "가방끈은 길지만 몸 쓰는 일엔 쥐약입니다.\n"
+        "이제 교실 중앙에서 조사를 시작하세요."
+    ),
+    "운동부": (
+        "🏃 [운동부]을(를) 선택하셨습니다!\n\n"
+        "💪 힘: 4 | ⚡ 민첩: 3\n"
+        "🧠 지능: 1 | 🍀 운: 1\n"
+        "🛡️ 정신력: 1\n\n"
+        "머리보다 몸이 먼저 반응하는 타입입니다!\n"
+        "이제 교실 중앙에서 조사를 시작하세요."
+    ),
+    "미술 실기생": (
+        "🎨 [미술 실기생]을(를) 선택하셨습니다!\n\n"
+        "💪 힘: 2 | ⚡ 민첩: 1\n"
+        "🧠 지능: 2 | 🍀 운: 2\n"
+        "🛡️ 정신력: 3\n\n"
+        "섬세한 감각과 남다른 정신력을 가졌습니다.\n"
+        "이제 교실 중앙에서 조사를 시작하세요."
+    )
+}
+
 @app.route('/select_job', methods=['POST'])
 def select_job():
-    """ [블록 2: 직업 선택] 특수문자 및 따옴표 제거 버전 """
+    """ [블록 2: 직업 선택] 1:1 매칭 텍스트 직접 출력 버전 """
     req = request.get_json()
     user_request = req.get('userRequest', {})
     user_info = user_request.get('user', {})
     user_id = user_info.get('id') or user_info.get('plusfriendUserKey') or user_request.get('plusfriend', {}).get('id', 'test_user')
     
-    # 1. 유저의 발화를 가져온 뒤, 양끝 공백을 없앱니다.
-    utterance = user_request.get('utterance', '').strip()
+    # 유저가 보낸 발화에서 따옴표, 공백 제거 (예: "🏃 운동부" -> "운동부")
+    utterance = user_request.get('utterance', '').strip().replace('"', '').replace("'", "")
     
-    # 🔍 [추가] 텍스트에 포함된 쌍따옴표(")와 홑따옴표(')를 전부 제거합니다.
-    utterance = utterance.replace('"', '').replace("'", "")
-    
-    action = req.get('action', {})
-    
-    # 2. 직업 이름 포함 여부 검사
-    chosen_job = None
+    # 🔍 입력받은 글자 그대로 직업을 결정합니다.
+    chosen_job = "범생이" # 찾지 못했을 때를 대비한 기본값
     for job in JOB_STATS.keys():
-        if job in utterance:  # 이제 '"운동부"'에서 따옴표가 빠진 '운동부'로 깔끔하게 비교합니다.
+        if job in utterance:
             chosen_job = job
             break
             
-    if not chosen_job:
-        chosen_job = action.get('params', {}).get('chosen_job') or action.get('clientExtra', {}).get('chosen_job', '범생이')
-    
-    # 유저 데이터 초기화
+    # ⚠️ 중요: 내부 유저 데이터 DB(스탯, 인벤토리)는 기존대로 정확하게 초기화합니다.
     user_db[user_id] = {
         "job": chosen_job,
         "stats": JOB_STATS[chosen_job].copy(),
         "inventory": []
     }
     
-    stats = user_db[user_id]["stats"]
-    
-    job_emojis = {"범생이": "🤓", "운동부": "🏃", "미술 실기생": "🎨"}
-    job_emoji = job_emojis.get(chosen_job, "🎭")
-
-    response_text = (
-        f"{job_emoji} [{chosen_job}]을(를) 선택하셨습니다!\n\n"
-        f"💪 힘: {stats['힘']} | ⚡ 민첩: {stats['민첩']}\n"
-        f"🧠 지능: {stats['지능']} | 🍀 운: {stats['운']}\n"
-        f"🛡️ 정신력: {stats['정신력']}\n\n"
-        f"이제 교실 중앙에서 조사를 시작하세요."
-    )
+    # 🎯 [핵심] 상단에 하나하나 적어둔 직업별 텍스트를 그대로 가져옵니다!
+    response_text = JOB_RESPONSES.get(chosen_job, JOB_RESPONSES["범생이"])
 
     return jsonify({
         "version": "2.0",
