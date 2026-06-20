@@ -4,17 +4,15 @@ import os
 
 app = Flask(__name__)
 
-# 유저들의 게임 상태(스탯, 인벤토리)를 저장할 인메모리 DB
+# 유저들의 게임 상태(스탯, 인벤토리, 체력)를 저장할 인메모리 DB
 user_db = {}
 
-# 직업별 초기 스탯 정의
 JOB_STATS = {
     "범생이": {"힘": 1, "민첩": 1, "지능": 5, "운": 1, "정신력": 2},
     "운동부": {"힘": 4, "민첩": 3, "지능": 1, "운": 1, "정신력": 1},
     "미술 실기생": {"힘": 2, "민첩": 1, "지능": 2, "운": 2, "정신력": 3}
 }
 
-# 직업별 출력 텍스트 정의
 JOB_RESPONSES = {
     "범생이": (
         "🤓 [범생이]을(를) 선택하셨습니다!\n\n"
@@ -43,28 +41,22 @@ JOB_RESPONSES = {
 }
 
 def get_clean_user_id(req):
-    """ 
-    🔍 어떤 상황(테스트 창, 실제 카카오톡, 블록 링크)에서도 
-    동일한 유저라면 반드시 똑같은 텍스트 ID를 반환하도록 강제하는 함수 
-    """
     user_request = req.get('userRequest', {})
     user_info = user_request.get('user', {})
     plusfriend = user_request.get('plusfriend', {})
     
-    # 카카오가 보내주는 모든 종류의 ID 후보군을 순서대로 체크합니다.
     uid = (
         user_info.get('id') or 
         user_info.get('plusfriendUserKey') or 
         plusfriend.get('id') or 
         'test_user'
     )
-    return str(uid) # 안전하게 문자열로 변환
+    return str(uid) 
 
 @app.route('/select_job', methods=['POST'])
 def select_job():
-    """ [블록 2: 직업 선택] """
     req = request.get_json()
-    user_id = get_clean_user_id(req) # ⭐ 안전한 ID 추출
+    user_id = get_clean_user_id(req) 
     
     utterance = req.get('userRequest', {}).get('utterance', '').strip().replace('"', '').replace("'", "")
     action = req.get('action', {})
@@ -78,11 +70,12 @@ def select_job():
     if not chosen_job:
         chosen_job = action.get('params', {}).get('chosen_job') or action.get('clientExtra', {}).get('chosen_job', '범생이')
     
-    # 내부 DB에 저장
+    # 🎯 내부 DB에 저장할 때 최대 체력(hp: 3)을 부여합니다!
     user_db[user_id] = {
         "job": chosen_job,
         "stats": JOB_STATS[chosen_job].copy(),
-        "inventory": []
+        "inventory": [],
+        "hp": 3  # 최대 체력 3
     }
     
     response_text = JOB_RESPONSES.get(chosen_job, JOB_RESPONSES["범생이"])
@@ -101,10 +94,10 @@ def select_job():
 def roll_check():
     """ [범용 주사위 판정 시스템] """
     req = request.get_json()
-    user_id = get_clean_user_id(req) # ⭐ 안전한 ID 추출
+    user_id = get_clean_user_id(req) 
     
     if user_id not in user_db:
-        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": f"⚠️ 플레이 기록이 없습니다. 처음부터 다시 시작해주세요. (ID: {user_id})"}}]}})
+        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": "⚠️ 플레이 기록이 없습니다. 처음부터 다시 시작해주세요."}}]}})
         
     player = user_db[user_id]
     client_extra = req['action'].get('clientExtra', {})
@@ -113,15 +106,16 @@ def roll_check():
     success_block = client_extra.get('success_block_id')   
     fail_block = client_extra.get('fail_block_id')         
     location = client_extra.get('location', '일반')  
+    
+    # 🎯 빌더에서 "is_danger": "true"를 보냈는지 확인합니다.
+    is_danger = client_extra.get('is_danger', 'false').lower() == 'true'
 
     dice_roll = random.randint(1, 6)
     stat_bonus = player["stats"].get(stat_type, 0)
     
     item_bonus = 0
-    if stat_type == "힘" and "빗자루" in player["inventory"]:
-        item_bonus += 1
-    if stat_type == "정신력" and "에너지바" in player["inventory"]:
-        item_bonus += 1
+    if stat_type == "힘" and "빗자루" in player["inventory"]: item_bonus += 1
+    if stat_type == "정신력" and "에너지바" in player["inventory"]: item_bonus += 1
 
     total_score = dice_roll + stat_bonus + item_bonus
     is_success = total_score >= difficulty
@@ -151,13 +145,36 @@ def roll_check():
         button_label = "다음 스토리 진행"
 
     else:
-        title = "💀 판정 실패..."
-        desc = f"📊 [{stat_type}] 판정 (목표: {difficulty})\n🎲 주사위: {dice_roll}\n💪 스탯: +{stat_bonus}\n"
-        if item_bonus > 0: desc += f"🎒 아이템 시너지: +{item_bonus}\n"
-        desc += f"🔥 최종 점수: {total_score}\n\n예기치 못한 위험이 닥칩니다."
-        
-        next_block = fail_block
-        button_label = "실패 결과 확인"
+        # 실패 처리
+        if is_danger:
+            # 위험한 판정에서 실패했을 때만 체력 감소!
+            player["hp"] -= 1
+            if player["hp"] <= 0:
+                del user_db[user_id]
+                title = "💀 게임 오버..."
+                desc = (
+                    f"📊 [{stat_type}] 판정 실패\n"
+                    f"🔥 앗! 치명상을 입었습니다.\n\n"
+                    f"체력이 0이 되어 쓰러졌습니다...\n"
+                    f"모든 소지품을 잃고 처음으로 돌아갑니다."
+                )
+                next_block = "6a26283f95b9c60df67a5932" 
+                button_label = "처음부터 다시 시작"
+            else:
+                title = "⚠️ 판정 실패 및 부상!"
+                desc = f"📊 [{stat_type}] 판정 (목표: {difficulty})\n🎲 주사위: {dice_roll}\n💪 스탯: +{stat_bonus}\n"
+                if item_bonus > 0: desc += f"🎒 아이템 시너지: +{item_bonus}\n"
+                desc += f"🔥 최종 점수: {total_score}\n\n위험에 노출되어 💔체력을 1 잃었습니다! (남은 체력: {player['hp']}/3)"
+                next_block = fail_block
+                button_label = "실패 결과 확인"
+        else:
+            # 체력이 깎이지 않는 일반적인 실패
+            title = "💀 판정 실패..."
+            desc = f"📊 [{stat_type}] 판정 (목표: {difficulty})\n🎲 주사위: {dice_roll}\n💪 스탯: +{stat_bonus}\n"
+            if item_bonus > 0: desc += f"🎒 아이템 시너지: +{item_bonus}\n"
+            desc += f"🔥 최종 점수: {total_score}\n\n예기치 못한 위험이 닥칩니다."
+            next_block = fail_block
+            button_label = "실패 결과 확인"
 
     return jsonify({
         "version": "2.0",
@@ -172,14 +189,53 @@ def roll_check():
         }
     })
 
-@app.route('/check_status', methods=['POST'])
-def check_status():
-    """ [신규 블록] 유저의 현재 상태 및 인벤토리(가방) 확인 """
+@app.route('/add_injury', methods=['POST'])
+def add_injury():
+    """ [신규 블록] 주사위 없이 그냥 함정을 밟았을 때 강제로 부상을 부여 """
     req = request.get_json()
-    user_id = get_clean_user_id(req) # ⭐ 안전한 ID 추출
+    user_id = get_clean_user_id(req) 
     
     if user_id not in user_db:
-        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": f"⚠️ 아직 게임을 시작하지 않았습니다. 직업을 먼저 선택해 주세요! (ID: {user_id})"}}]}})
+        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": "⚠️ 플레이 기록이 없습니다."}}]}})
+        
+    player = user_db[user_id]
+    player["hp"] -= 1
+    
+    client_extra = req['action'].get('clientExtra', {})
+    next_block = client_extra.get('next_block_id')
+
+    if player["hp"] <= 0:
+        del user_db[user_id]
+        title = "💀 게임 오버..."
+        desc = "치명적인 상처를 입고 쓰러졌습니다...\n모든 데이터가 초기화됩니다."
+        button_block = "6a26283f95b9c60df67a5932"
+        button_label = "처음부터 다시 시작"
+    else:
+        title = "⚠️ 함정 발동! 부상을 입었습니다."
+        desc = f"아야! 예기치 못한 피해를 입었습니다.\n\n💔 체력 -1 (남은 체력: {player['hp']}/3)"
+        button_block = next_block
+        button_label = "스토리 계속하기"
+
+    return jsonify({
+        "version": "2.0",
+        "template": {
+            "outputs": [{
+                "basicCard": {
+                    "title": title,
+                    "description": desc,
+                    "buttons": [{"action": "block", "label": button_label, "blockId": button_block if button_block else "초기블록"}]
+                }
+            }]
+        }
+    })
+
+@app.route('/check_status', methods=['POST'])
+def check_status():
+    req = request.get_json()
+    user_id = get_clean_user_id(req) 
+    
+    if user_id not in user_db:
+        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": "⚠️ 아직 게임을 시작하지 않았습니다. 직업을 먼저 선택해 주세요!"}}]}})
         
     player = user_db[user_id]
     stats = player["stats"]
@@ -199,6 +255,8 @@ def check_status():
 
     response_text = (
         f"{job_emoji} [{player['job']}]의 현재 상태\n"
+        f"──────────────────\n"
+        f"❤️ 체력: {player.get('hp', 3)} / 3\n"
         f"──────────────────\n"
         f"💪 힘: {stats['힘']} | ⚡ 민첩: {stats['민첩']}\n"
         f"🧠 지능: {stats['지능']} | 🍀 운: {stats['운']}\n"
@@ -220,13 +278,12 @@ def check_status():
             }]
         }
     })
+
 @app.route('/reset_data', methods=['POST'])
 def reset_data():
-    """ [신규 블록] 유저의 데이터(스탯, 가방)를 완전히 삭제하고 초기화 """
     req = request.get_json()
-    user_id = get_clean_user_id(req) # 유저 고유 ID 가져오기
+    user_id = get_clean_user_id(req) 
     
-    # 🔥 유저 데이터베이스(user_db)에서 해당 유저의 정보를 완전히 삭제합니다.
     if user_id in user_db:
         del user_db[user_id]
         
@@ -244,11 +301,12 @@ def reset_data():
                 {
                     "action": "block", 
                     "label": "🎭 직업 다시 선택하기", 
-                    "blockId": "6a26283f95b9c60df67a5932" # 👈 중요!
+                    "blockId": "6a26283f95b9c60df67a5932" 
                 }
             ]
         }
     })
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
