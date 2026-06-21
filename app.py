@@ -129,9 +129,8 @@ def roll_check():
             player["inventory"].append("에너지바")
             acquired_item = "에너지바"
         elif location == "동아리실" and "유물" not in player["inventory"]:
-            if player["stats"].get("운", 0) >= 7:
-                player["inventory"].append("유물")
-                acquired_item = "유물"
+            player["inventory"].append("유물")
+            acquired_item = "유물"
 
         title = "🎉 판정 성공!"
         desc = f"📊 [{stat_type}] 판정 (목표: {difficulty})\n🎲 주사위: {dice_roll}\n💪 스탯: +{stat_bonus}\n"
