@@ -318,11 +318,13 @@ def use_artifact():
         return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": "⚠️ 아직 게임을 시작하지 않았습니다."}}]}})
         
     player = user_db[user_id]
-    client_extra = req['action'].get('clientExtra', {})
     
-    # 빌더에서 전달받을 성공/실패 시 이동할 블록 ID
-    success_block = client_extra.get('6a380e14416cbf4db446502a')
-    fail_block = client_extra.get('6a380e06416cbf4db4465028')
+    # ─────────────────────────────────────────────────────────
+    # ✨ [이 부분을 아래처럼 완벽하게 교체해 주세요!]
+    # ─────────────────────────────────────────────────────────
+    success_block = "6a380e14416cbf4db446502a"  # 성공 시 (히든)
+    fail_block = "6a380e06416cbf4db4465028"     # 실패 시 (끗)
+    # ─────────────────────────────────────────────────────────
 
     # 인벤토리에 "유물"이 있는지 검사
     if "유물" in player["inventory"]:
