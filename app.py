@@ -321,7 +321,7 @@ def use_artifact():
     client_extra = req['action'].get('clientExtra', {})
     
     # 빌더에서 전달받을 성공/실패 시 이동할 블록 ID
-    success_block = client_extra.get('6a1ce6546f076d7204740fbb')
+    success_block = client_extra.get('6a380f57f6db5c75e814cac0')
     fail_block = client_extra.get('6a1ce65fa473984e62868ba0')
 
     # 인벤토리에 "유물"이 있는지 검사
