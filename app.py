@@ -101,7 +101,7 @@ def roll_check():
         
     player = user_db[user_id]
     client_extra = req['action'].get('clientExtra', {})
-    stat_type = client_extra.get('stat', '운')             
+    stat_type = client_extra.get('stat', '운')              
     difficulty = int(client_extra.get('dc', 5))            
     success_block = client_extra.get('success_block_id')   
     fail_block = client_extra.get('fail_block_id')         
@@ -303,6 +303,49 @@ def reset_data():
                     "blockId": "6a26283f95b9c60df67a5932" 
                 }
             ]
+        }
+    })
+
+# ==========================================
+# 🛑 [신규 추가된 부분] 유물 조건부 통과 로직
+# ==========================================
+@app.route('/use_artifact', methods=['POST'])
+def use_artifact():
+    req = request.get_json()
+    user_id = get_clean_user_id(req) 
+    
+    if user_id not in user_db:
+        return jsonify({"version": "2.0", "template": {"outputs": [{"simpleText": {"text": "⚠️ 아직 게임을 시작하지 않았습니다."}}]}})
+        
+    player = user_db[user_id]
+    client_extra = req['action'].get('clientExtra', {})
+    
+    # 빌더에서 전달받을 성공/실패 시 이동할 블록 ID
+    success_block = client_extra.get('6a1ce6546f076d7204740fbb')
+    fail_block = client_extra.get('6a1ce65fa473984e62868ba0')
+
+    # 인벤토리에 "유물"이 있는지 검사
+    if "유물" in player["inventory"]:
+        title = "✨ 유물 사용!"
+        desc = "가방 안의 [유물]이 강하게 빛나며 굳게 닫힌 결계를 뚫어냅니다!\n이제 안으로 들어갈 수 있습니다."
+        button_label = "🔥 히든 엔딩으로"
+        next_block = success_block
+    else:
+        title = "🔒 굳게 닫힌 문..."
+        desc = "결계가 쳐져 있어 일반적인 방법으로는 지나갈 수 없습니다.\n무언가 특별한 유물이 필요할 것 같습니다."
+        button_label = "돌아가기"
+        next_block = fail_block
+
+    return jsonify({
+        "version": "2.0",
+        "template": {
+            "outputs": [{
+                "basicCard": {
+                    "title": title,
+                    "description": desc,
+                    "buttons": [{"action": "block", "label": button_label, "blockId": next_block if next_block else "초기블록"}]
+                }
+            }]
         }
     })
 
