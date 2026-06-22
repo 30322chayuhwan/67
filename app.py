@@ -70,7 +70,7 @@ def select_job():
     if not chosen_job:
         chosen_job = action.get('params', {}).get('chosen_job') or action.get('clientExtra', {}).get('chosen_job', '범생이')
     
-    # 🎯 내부 DB에 저장할 때 최대 체력(hp: 3)을 부여합니다!
+    # 내부 DB에 저장할 때 최대 체력(hp: 3)을 부여합니다!
     user_db[user_id] = {
         "job": chosen_job,
         "stats": JOB_STATS[chosen_job].copy(),
@@ -101,13 +101,13 @@ def roll_check():
         
     player = user_db[user_id]
     client_extra = req['action'].get('clientExtra', {})
-    stat_type = client_extra.get('stat', '운')              
+    stat_type = client_extra.get('stat', '운')             
     difficulty = int(client_extra.get('dc', 5))            
     success_block = client_extra.get('success_block_id')   
     fail_block = client_extra.get('fail_block_id')         
     location = client_extra.get('location', '일반')  
     
-    # 🎯 빌더에서 "is_danger": "true"를 보냈는지 확인합니다.
+    # 빌더에서 "is_danger": "true"를 보냈는지 확인합니다.
     is_danger = client_extra.get('is_danger', 'false').lower() == 'true'
 
     dice_roll = random.randint(1, 6)
@@ -265,14 +265,14 @@ def check_status():
         f"✨ 적용 중인 아이템 효과:\n{effects_text}"
     )
 
+    # 🛑 요청하신 대로 basicCard 안에 있던 "buttons" 리스트를 완전히 삭제했습니다!
     return jsonify({
         "version": "2.0",
         "template": {
             "outputs": [{
                 "basicCard": {
                     "title": "📋 캐릭터 정보 및 가방",
-                    "description": response_text,
-                    "buttons": [{"action": "block", "label": "돌아가기", "blockId": "6a1ce5d3568d272d8eb2365b"}]
+                    "description": response_text
                 }
             }]
         }
@@ -306,9 +306,6 @@ def reset_data():
         }
     })
 
-# ==========================================
-# 🛑 [신규 추가된 부분] 유물 조건부 통과 로직
-# ==========================================
 @app.route('/use_artifact', methods=['POST'])
 def use_artifact():
     req = request.get_json()
@@ -319,12 +316,9 @@ def use_artifact():
         
     player = user_db[user_id]
     
-    # ─────────────────────────────────────────────────────────
-    # ✨ [이 부분을 아래처럼 완벽하게 교체해 주세요!]
-    # ─────────────────────────────────────────────────────────
-    success_block = "6a380e14416cbf4db446502a"  # 성공 시 (히든)
-    fail_block = "6a380e06416cbf4db4465028"     # 실패 시 (끗)
-    # ─────────────────────────────────────────────────────────
+    # 진짜 블록 ID 직접 입력 완료
+    success_block = "6a380e14416cbf4db446502a"
+    fail_block = "6a380e06416cbf4db4465028"
 
     # 인벤토리에 "유물"이 있는지 검사
     if "유물" in player["inventory"]:
